@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Detector de Fraude Financeira</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 800px; margin: auto; padding: 20px; border: 1px solid #ccc; border-radius: 8px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input[type="number"], select { width: calc(100% - 22px); padding: 8px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 4px; }
+        .v-input-group {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            gap: 10px;
+        }
+        .v-input-group div {
+            width: calc(25% - 10px);
+            min-width: 150px;
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 5px;
+        }
+        .v-input-group div label {
+            font-weight: normal;
+            font-size: 0.9em;
+            margin-bottom: 2px;
+        }
+        .v-input-group div input {
+            width: 100%;
+            margin-bottom: 0;
+        }
+        button { background-color: #4CAF50; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; margin-top: 10px; }
+        button:hover { background-color: #45a049; }
+        #resultado { margin-top: 20px; padding: 10px; border: 1px solid #eee; background-color: #f9f9f9; border-radius: 4px; }
+        .is-fraud { color: red; font-weight: bold; }
+        .not-fraud { color: green; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Detector de Fraude Financeira</h1>
+        <p>Preencha os dados da transação para verificar se é fraudulenta ou escolha um exemplo.</p>
+
+        <label for="exampleSelector">Carregar Exemplo:</label>
+        <select id="exampleSelector">
+            <option value="">-- Selecione um exemplo --</option>
+        </select>
+
+        <form id="fraudForm">
+            <label for="time">Time (segundos):</label>
+            <input type="number" id="time" name="Time" value="0" step="1" required>
+
+            <label for="amount">Amount:</label>
+            <input type="number" id="amount" name="Amount" value="0.00" step="0.01" required>
+
+            <h2>Features Anônimas (V1-V28)</h2>
+            <p style="font-size: 0.9em; color: gray;">
+                <small>Estes valores são resultado de uma transformação PCA e são essenciais para a predição.</small>
+            </p>
+            <div class="v-input-group" id="vFeaturesContainer">
+            </div>
+
+            <button type="submit">Verificar Fraude</button>
+        </form>
+
+        <div id="resultado">
+        </div>
+    </div>
+
+    <script>
+        const transactionExamples = [
+            {
+                "description": "Exemplo 1",
+                "Time": 0,
+                "Amount": 149.62,
+                "V1": -1.3598071336738, "V2": -0.0727811733098497, "V3": 2.53634673796914, "V4": 1.37815522427443,
+                "V5": -0.338320769942518, "V6": 0.462387777762292, "V7": 0.239598554061257, "V8": 0.0986979012610507,
+                "V9": 0.363786969611213, "V10": 0.0907941719789316, "V11": -0.551599533260813, "V12": -0.617800855762348,
+                "V13": -0.991389847235408, "V14": -0.311169353699879, "V15": 1.46817697209427, "V16": -0.470400525259478,
+                "V17": 0.207971241929242, "V18": 0.0257905801985591, "V19": 0.403992960255733, "V20": 0.251412098239705,
+                "V21": -0.018306777944153, "V22": 0.277837575558899, "V23": -0.110473910188767, "V24": 0.0669280749146731,
+                "V25": 0.128539358273528, "V26": -0.189114843888824, "V27": 0.133558376740387, "V28": -0.0210530534538215
+            },
+            {
+                "description": "Exemplo 2",
+                "Time": 0,
+                "Amount": 2.69,
+                "V1": 1.19185711131486, "V2": 0.26615071205963, "V3": 0.16648011335321, "V4": 0.448154078460911,
+                "V5": 0.0600176492822243, "V6": -0.0823608088155687, "V7": -0.0788029833323113, "V8": 0.0851016549148104,
+                "V9": -0.255425128109186, "V10": -0.166974414004614, "V11": 1.61272666105479, "V12": 1.06523531137287,
+                "V13": 0.48909501589608, "V14": -0.143772296441519, "V15": 0.635558093258208, "V16": 0.463917041022171,
+                "V17": -0.114804663102346, "V18": -0.183361270123994, "V19": -0.145783041325259, "V20": -0.0690831352230203,
+                "V21": -0.225775248033138, "V22": -0.638671952771851, "V23": 0.101288021253234, "V24": -0.339846475529127,
+                "V25": 0.167170404418143, "V26": 0.125894532368176, "V27": -0.00898309914322813, "V28": 0.0147241691924927
+            },
+            {
+                "description": "Exemplo 3",
+                "Time": 1,
+                "Amount": 378.66,
+                "V1": -1.35835406159823, "V2": -1.34016307473609, "V3": 1.77320934263119, "V4": 0.379779593034328,
+                "V5": -0.503198133318193, "V6": 1.80049938079263, "V7": 0.791460956450422, "V8": 0.247675786588991,
+                "V9": -1.51465432260583, "V10": 0.207642865216696, "V11": 0.624501459424895, "V12": 0.066083685268831,
+                "V13": 0.717292731410831, "V14": -0.165945922763554, "V15": 2.34586494901581, "V16": -2.89008319444231,
+                "V17": 1.10996937869599, "V18": -0.121359313195888, "V19": -2.26185709530414, "V20": 0.524979725224404,
+                "V21": 0.247998153469754, "V22": 0.771679401917229, "V23": 0.909412262347719, "V24": -0.689280956490685,
+                "V25": -0.327641833735251, "V26": -0.139096571514147, "V27": -0.0553527940384261, "V28": -0.0597518405929204
+            },
+            {
+                "description": "Exemplo 3 (Fraude)",
+                "Time": 406,
+                "Amount": 0,
+                "V1": -2.3122265423263, "V2": 1.95199201064158, "V3": -1.60985073229769, "V4": 3.9979055875468,
+                "V5": -0.522187864667764, "V6": -1.42654531920595, "V7": -2.53738730624579, "V8": 1.39165724829804,
+                "V9": -2.77008927719433, "V10": -2.77227214465915, "V11": 3.20203320709635, "V12": -2.89990738849473,
+                "V13": -0.595221881324605, "V14": -4.28925378244217, "V15": 0.389724120274487, "V16": -1.14074717980657,
+                "V17": -2.83005567450437, "V18": -0.0168224681808257, "V19": 0.416955705037907, "V20": 0.126910559061474,
+                "V21": 0.517232370861764, "V22": -0.0350493686052974, "V23": -0.465211076182388, "V24": 0.320198198514526,
+                "V25": 0.0445191674731724, "V26": 0.177839798284401, "V27": 0.261145002567677, "V28": -0.143275874698919
+            },
+            {
+                "description": "Exemplo 4",
+                "Time": 7519,
+                "Amount": 1,
+                "V1": 1.23423504613468, "V2": 3.0197404207034, "V3": -4.30459688479665, "V4": 4.73279513041887,
+                "V5": 3.62420083055386, "V6": -1.35774566315358, "V7": 1.71344498787235, "V8": -0.496358487073991,
+                "V9": -1.28285782036322, "V10": -2.44746925511151, "V11": 2.10134386504854, "V12": -4.6096283906446,
+                "V13": 1.46437762476188, "V14": -6.07933719308005, "V15": -0.339237372732577, "V16": 2.58185095378146,
+                "V17": 6.73938438478335, "V18": 3.04249317830411, "V19": -2.72185312222835, "V20": 0.00906083639534526,
+                "V21": -0.37906830709218, "V22": -0.704181032215427, "V23": -0.656804756348389, "V24": -1.63265295692929,
+                "V25": 1.48890144838237, "V26": 0.566797273468934, "V27": -0.0100162234965625, "V28": 0.146792734916988
+            },
+            {
+                "description": "Exemplo 5",
+                "Time": 4462,
+                "Amount": 239.93,
+                "V1": -2.30334956758553, "V2": 1.759247460267, "V3": -0.359744743330052, "V4": 2.33024305053917,
+                "V5": -0.821628328375422, "V6": -0.0757875706194599, "V7": 0.562319782266954, "V8": -0.399146578487216,
+                "V9": -0.238253367661746, "V10": -1.52541162656194, "V11": 2.03291215755072, "V12": -6.56012429505962,
+                "V13": 0.0229373234890961, "V14": -1.47010153611197, "V15": -0.698826068579047, "V16": -2.28219382856251,
+                "V17": -4.78183085597533, "V18": -2.61566494476124, "V19": -1.33444106667307, "V20": -0.430021867171611,
+                "V21": -0.294166317554753, "V22": -0.932391057274991, "V23": 0.172726295799422, "V24": -0.0873295379700724,
+                "V25": -0.156114264651172, "V26": -0.542627889040196, "V27": 0.0395659889264757, "V28": -0.153028796529788
+            },
+            {
+                "description": "Exemplo 6",
+                "Time": 6986,
+                "Amount": 59,
+                "V1": -4.39797444171999, "V2": 1.35836702839758, "V3": -2.5928442182573, "V4": 2.67978696694832,
+                "V5": -1.12813094208956, "V6": -1.70653638774951, "V7": -3.49619729302467, "V8": -0.248777743025673,
+                "V9": -0.24776789948008, "V10": -4.80163740602813, "V11": 4.89584422347523, "V12": -10.9128193194019,
+                "V13": 0.184371685834387, "V14": -6.77109672468083, "V15": -0.00732618257771211, "V16": -7.35808322132346,
+                "V17": -12.5984185405511, "V18": -5.13154862842983, "V19": 0.308333945758691, "V20": -0.17160787864796,
+                "V21": 0.573574068424352, "V22": 0.176967718048195, "V23": -0.436206883597401, "V24": -0.0535018648884285,
+                "V25": 0.252405261951833, "V26": -0.657487754764504, "V27": -0.827135714578603, "V28": 0.849573379985768
+            }
+        ];
+
+        function generateVInputs() {
+            const container = document.getElementById('vFeaturesContainer');
+            if (!container) {
+                return;
+            }
+            container.innerHTML = '';
+
+            for (let i = 1; i <= 28; i++) {
+                const div = document.createElement('div');
+                const label = document.createElement('label');
+                label.setAttribute('for', `v${i}`);
+                label.textContent = `V${i}:`;
+                const input = document.createElement('input');
+                input.setAttribute('type', 'number');
+                input.setAttribute('id', `v${i}`);
+                input.setAttribute('name', `V${i}`);
+                input.setAttribute('step', 'any');
+                input.setAttribute('value', '0.0');
+                input.setAttribute('required', '');
+
+                div.appendChild(label);
+                div.appendChild(input);
+                container.appendChild(div);
+            }
+        }
+
+        function populateExampleSelector() {
+            const selector = document.getElementById('exampleSelector');
+            if (!selector) {
+                return;
+            }
+            selector.innerHTML = '<option value="">-- Selecione um exemplo --</option>';
+            transactionExamples.forEach((example, index) => {
+                const option = document.createElement('option');
+                option.value = index;
+                option.textContent = example.description;
+                selector.appendChild(option);
+            });
+        }
+
+        function loadExample(exampleIndex) {
+            exampleIndex = exampleIndex === "" ? null : parseInt(exampleIndex);
+
+            if (exampleIndex === null || isNaN(exampleIndex) || exampleIndex < 0 || exampleIndex >= transactionExamples.length) {
+                document.getElementById('time').value = 0;
+                document.getElementById('amount').value = 0.00;
+                for (let i = 1; i <= 28; i++) {
+                    const vInput = document.getElementById(`v${i}`);
+                    if (vInput) vInput.value = 0.0;
+                }
+                return;
+            }
+
+            const example = transactionExamples[exampleIndex];
+            document.getElementById('time').value = example.Time;
+            document.getElementById('amount').value = example.Amount;
+
+            for (let i = 1; i <= 28; i++) {
+                const vInput = document.getElementById(`v${i}`);
+                if (vInput) {
+                    vInput.value = example[`V${i}`];
+                }
+            }
+        }
+
+        function initializePage() {
+            generateVInputs();
+            populateExampleSelector();
+
+            if (transactionExamples.length > 0) {
+                const selector = document.getElementById('exampleSelector');
+                if (selector) {
+                    selector.value = 0;
+                    loadExample(0);
+                }
+            }
+
+            const exampleSelector = document.getElementById('exampleSelector');
+            if (exampleSelector) {
+                exampleSelector.addEventListener('change', function() {
+                    loadExample(this.value);
+                });
+            }
+
+            const fraudForm = document.getElementById('fraudForm');
+            if (fraudForm) {
+                fraudForm.addEventListener('submit', async function(event) {
+                    event.preventDefault();
+
+                    const data = {};
+                    data['Time'] = parseFloat(document.getElementById('time').value);
+                    data['Amount'] = parseFloat(document.getElementById('amount').value);
+
+                    for (let i = 1; i <= 28; i++) {
+                        const vInput = document.getElementById(`v${i}`);
+                        if (vInput) {
+                            data[`V${i}`] = parseFloat(vInput.value);
+                        } else {
+                            data[`V${i}`] = 0.0;
+                        }
+                    }
+
+                    try {
+                        const response = await fetch('http://localhost:5000/predict_fraud', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(data)
+                        });
+
+                        const result = await response.json();
+                        const resultadoDiv = document.getElementById('resultado');
+
+                        if (response.ok) {
+                            let message = `Classificação: <span class="${result.is_fraud === 1 ? 'is-fraud' : 'not-fraud'}">${result.is_fraud === 1 ? 'FRAUDE' : 'NÃO FRAUDE'}</span><br>`;
+                            message += `Probabilidade de Fraude: ${result.fraud_probability.toFixed(4)}`;
+                            resultadoDiv.innerHTML = message;
+                        } else {
+                            resultadoDiv.innerHTML = `<p style="color: red;">Erro: ${result.error}</p>`;
+                        }
+
+                    } catch (error) {
+                        document.getElementById('resultado').innerHTML = `<p style="color: red;">Erro ao conectar à API: ${error.message}</p>`;
+                    }
+                });
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', initializePage);
+    </script>
+</body>
+</html>
